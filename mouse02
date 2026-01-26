@@ -1,0 +1,126 @@
+--[[
+
+	Aimbot MOUSE PURO (CAMERA FIXA)
+	✔ Não gira a câmera
+	✔ Sem atraso
+	✔ Terceira pessoa
+	✔ Tronco
+	✔ Toggle U
+
+]]
+
+--// Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local mousemoverel = mousemoverel
+
+--// Estado
+local Running = false
+local MasterEnabled = true
+local Typing = false
+
+--// Config
+local Settings = {
+	LockPart = "HumanoidRootPart",
+	Sensitivity = 1.9, -- quanto MENOR, mais rápido (1.7–2.2 ideal)
+	TeamCheck = false
+}
+
+--// Fixar câmera
+Camera.CameraType = Enum.CameraType.Scriptable
+local FixedCFrame = Camera.CFrame
+
+--// Util
+local function GetClosestTarget()
+	local closest
+	local shortest = math.huge
+	local mousePos = UserInputService:GetMouseLocation()
+
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer and plr.Character then
+			local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+			local part = plr.Character:FindFirstChild(Settings.LockPart)
+
+			if hum and part and hum.Health > 0 then
+				if Settings.TeamCheck and plr.Team == LocalPlayer.Team then
+					continue
+				end
+
+				local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+				if onScreen then
+					local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+					if dist < shortest then
+						shortest = dist
+						closest = part
+					end
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+--// Loop (Heartbeat = menos atraso que RenderStepped)
+RunService.Heartbeat:Connect(function()
+	if not MasterEnabled or not Running then
+		return
+	end
+
+	-- mantém câmera parada VISUALMENTE
+	Camera.CFrame = FixedCFrame
+
+	local targetPart = GetClosestTarget()
+	if not targetPart then return end
+
+	local screenPos = Camera:WorldToViewportPoint(targetPart.Position)
+	local mousePos = UserInputService:GetMouseLocation()
+
+	local dx = (screenPos.X - mousePos.X) * 0.85
+	local dy = (screenPos.Y - mousePos.Y) * 0.85
+
+	mousemoverel(dx / Settings.Sensitivity, dy / Settings.Sensitivity)
+end)
+
+--// Inputs
+UserInputService.InputBegan:Connect(function(input)
+	if Typing then return end
+
+	-- Toggle geral
+	if input.KeyCode == Enum.KeyCode.U then
+		MasterEnabled = not MasterEnabled
+		Running = false
+
+		if MasterEnabled then
+			Camera.CameraType = Enum.CameraType.Scriptable
+			FixedCFrame = Camera.CFrame
+		else
+			Camera.CameraType = Enum.CameraType.Custom
+		end
+		return
+	end
+
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		Running = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		Running = false
+	end
+end)
+
+UserInputService.TextBoxFocused:Connect(function()
+	Typing = true
+end)
+
+UserInputService.TextBoxFocusReleased:Connect(function()
+	Typing = false
+end)
