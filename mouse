@@ -1,0 +1,115 @@
+--[[
+
+	Aimbot SOMENTE MOUSE (SEM CAMERA)
+	Lock: Tronco (HumanoidRootPart)
+	Toggle global: Tecla U
+	Ativação: Botão direito do mouse
+
+]]
+
+--// Cache
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local mousemoverel = mousemoverel or (Input and Input.MouseMove)
+
+--// Estado
+local Running = false
+local MasterEnabled = true
+local Typing = false
+
+--// Configurações
+local Settings = {
+	LockPart = "HumanoidRootPart",
+	Sensitivity = 3.5, -- menor = mais forte
+	TeamCheck = false
+}
+
+--// Util
+local function GetClosestPlayer()
+	local closestPlayer = nil
+	local shortestDistance = math.huge
+	local mousePos = UserInputService:GetMouseLocation()
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character then
+			local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+			local part = player.Character:FindFirstChild(Settings.LockPart)
+
+			if humanoid and part and humanoid.Health > 0 then
+				if Settings.TeamCheck and player.Team == LocalPlayer.Team then
+					continue
+				end
+
+				local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+				if onScreen then
+					local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+					if dist < shortestDistance then
+						shortestDistance = dist
+						closestPlayer = player
+					end
+				end
+			end
+		end
+	end
+
+	return closestPlayer
+end
+
+--// Loop principal
+RunService.RenderStepped:Connect(function()
+	if not MasterEnabled or not Running then
+		return
+	end
+
+	local target = GetClosestPlayer()
+	if not target then return end
+
+	local char = target.Character
+	local part = char and char:FindFirstChild(Settings.LockPart)
+	if not part then return end
+
+	local screenPos = Camera:WorldToViewportPoint(part.Position)
+	local mousePos = UserInputService:GetMouseLocation()
+
+	local dx = (screenPos.X - mousePos.X) / Settings.Sensitivity
+	local dy = (screenPos.Y - mousePos.Y) / Settings.Sensitivity
+
+	mousemoverel(dx, dy)
+end)
+
+--// Inputs
+UserInputService.InputBegan:Connect(function(input)
+	if Typing then return end
+
+	-- Toggle global (U)
+	if input.KeyCode == Enum.KeyCode.U then
+		MasterEnabled = not MasterEnabled
+		Running = false
+		return
+	end
+
+	-- Botão direito
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		Running = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		Running = false
+	end
+end)
+
+UserInputService.TextBoxFocused:Connect(function()
+	Typing = true
+end)
+
+UserInputService.TextBoxFocusReleased:Connect(function()
+	Typing = false
+end)
