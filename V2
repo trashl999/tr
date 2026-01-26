@@ -1,0 +1,206 @@
+--[[
+
+	Universal Aimbot Module (SEM FOV)
+	Lock: Tronco (HumanoidRootPart)
+	Toggle global: Tecla U
+
+]]
+
+--// Cache
+local game, workspace = game, workspace
+local getrawmetatable, setmetatable, pcall, getgenv, next =
+	getrawmetatable, setmetatable, pcall, getgenv, next
+
+local Vector2new, Vector3zero, CFramenew, TweenInfonew =
+	Vector2.new, Vector3.zero, CFrame.new, TweenInfo.new
+
+local stringlower, stringsub, tablefind, tableremove, mathclamp =
+	string.lower, string.sub, table.find, table.remove, math.clamp
+
+local mousemoverel = mousemoverel or (Input and Input.MouseMove)
+
+--// Metatable fallback
+local GameMetatable = getrawmetatable and getrawmetatable(game) or {
+	__index = function(self, Index) return self[Index] end,
+	__newindex = function(self, Index, Value) self[Index] = Value end
+}
+
+local __index = GameMetatable.__index
+local __newindex = GameMetatable.__newindex
+local GetService = __index(game, "GetService")
+
+--// Services
+local RunService = GetService(game, "RunService")
+local UserInputService = GetService(game, "UserInputService")
+local TweenService = GetService(game, "TweenService")
+local Players = GetService(game, "Players")
+
+--// Objects
+local LocalPlayer = __index(Players, "LocalPlayer")
+local Camera = __index(workspace, "CurrentCamera")
+
+local FindFirstChild = __index(game, "FindFirstChild")
+local FindFirstChildOfClass = __index(game, "FindFirstChildOfClass")
+local GetDescendants = __index(game, "GetDescendants")
+local WorldToViewportPoint = __index(Camera, "WorldToViewportPoint")
+local GetPartsObscuringTarget = __index(Camera, "GetPartsObscuringTarget")
+local GetMouseLocation = __index(UserInputService, "GetMouseLocation")
+local GetPlayers = __index(Players, "GetPlayers")
+
+--// State
+local Typing = false
+local Running = false
+local MasterEnabled = true
+local ServiceConnections = {}
+local Animation
+local OriginalSensitivity
+
+local Connect = __index(game, "DescendantAdded").Connect
+local Disconnect
+do
+	local c = Connect(__index(game, "DescendantAdded"), function() end)
+	Disconnect = c.Disconnect
+	Disconnect(c)
+end
+
+--// Environment
+getgenv().ExunysDeveloperAimbot = {
+	DeveloperSettings = {
+		UpdateMode = "RenderStepped",
+		TeamCheckOption = "TeamColor"
+	},
+
+	Settings = {
+		Enabled = true,
+
+		TeamCheck = false,
+		AliveCheck = true,
+		WallCheck = false,
+
+		OffsetToMoveDirection = false,
+		OffsetIncrement = 15,
+
+		Sensitivity = 0,
+		Sensitivity2 = 3.5,
+
+		LockMode = 1, -- 1 = CFrame | 2 = mousemoverel
+		LockPart = "HumanoidRootPart",
+
+		TriggerKey = Enum.UserInputType.MouseButton2,
+		Toggle = false
+	},
+
+	Blacklisted = {},
+	Locked = nil
+}
+
+local Environment = getgenv().ExunysDeveloperAimbot
+
+--// Utils
+local ConvertVector = function(v)
+	return Vector2new(v.X, v.Y)
+end
+
+local CancelLock = function()
+	Environment.Locked = nil
+	__newindex(UserInputService, "MouseDeltaSensitivity", OriginalSensitivity)
+	if Animation then
+		Animation:Cancel()
+	end
+end
+
+--// Core
+local GetClosestPlayer = function()
+	local Settings = Environment.Settings
+	local RequiredDistance = math.huge
+	local Closest
+
+	for _, plr in next, GetPlayers(Players) do
+		if plr ~= LocalPlayer and not tablefind(Environment.Blacklisted, plr.Name) then
+			local char = plr.Character
+			local hum = char and FindFirstChildOfClass(char, "Humanoid")
+			local part = char and FindFirstChild(char, Settings.LockPart)
+
+			if hum and part and hum.Health > 0 then
+				local pos, onscreen = WorldToViewportPoint(Camera, part.Position)
+				if onscreen then
+					local dist = (GetMouseLocation(UserInputService) - ConvertVector(pos)).Magnitude
+					if dist < RequiredDistance then
+						RequiredDistance = dist
+						Closest = plr
+					end
+				end
+			end
+		end
+	end
+
+	Environment.Locked = Closest
+end
+
+--// Load
+local Load = function()
+	OriginalSensitivity = UserInputService.MouseDeltaSensitivity
+	local Settings = Environment.Settings
+
+	ServiceConnections.Render =
+		Connect(__index(RunService, Environment.DeveloperSettings.UpdateMode), function()
+			if not MasterEnabled or not Running or not Settings.Enabled then
+				return
+			end
+
+			GetClosestPlayer()
+
+			if Environment.Locked then
+				local char = Environment.Locked.Character
+				local part = char and FindFirstChild(char, Settings.LockPart)
+				if not part then
+					CancelLock()
+					return
+				end
+
+				local targetPos = part.Position
+
+				if Settings.LockMode == 2 then
+					local screenPos = WorldToViewportPoint(Camera, targetPos)
+					mousemoverel(
+						(screenPos.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2,
+						(screenPos.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2
+					)
+				else
+					__newindex(Camera, "CFrame",
+						CFramenew(Camera.CFrame.Position, targetPos))
+					__newindex(UserInputService, "MouseDeltaSensitivity", 0)
+				end
+			end
+		end)
+
+	ServiceConnections.InputBegan =
+		Connect(UserInputService.InputBegan, function(input)
+			if Typing then return end
+
+			-- Toggle GLOBAL (U)
+			if input.KeyCode == Enum.KeyCode.U then
+				MasterEnabled = not MasterEnabled
+				if not MasterEnabled then
+					Running = false
+					CancelLock()
+				end
+				return
+			end
+
+			if input.UserInputType == Settings.TriggerKey then
+				Running = true
+			end
+		end)
+
+	ServiceConnections.InputEnded =
+		Connect(UserInputService.InputEnded, function(input)
+			if input.UserInputType == Settings.TriggerKey then
+				Running = false
+				CancelLock()
+			end
+		end)
+end
+
+Load()
+return Environment
