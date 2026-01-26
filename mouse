@@ -3,7 +3,7 @@
 	Aimbot SOMENTE MOUSE (SEM CAMERA)
 	Lock: Tronco (HumanoidRootPart)
 	Toggle global: Tecla U
-	Ativação: Botão direito do mouse
+	Ativação: Segurar tecla G
 
 ]]
 
@@ -26,8 +26,11 @@ local Typing = false
 --// Configurações
 local Settings = {
 	LockPart = "HumanoidRootPart",
-	Sensitivity = 3.5, -- menor = mais forte
-	TeamCheck = false
+	Sensitivity = 2.0,      -- menor = mais forte
+	ForceMultiplier = 1.6,  -- multiplicador de força
+	MaxStep = 25,           -- limite por frame (evita pulo)
+	TeamCheck = false,
+	ActivationKey = Enum.KeyCode.G
 }
 
 --// Util
@@ -77,8 +80,12 @@ RunService.RenderStepped:Connect(function()
 	local screenPos = Camera:WorldToViewportPoint(part.Position)
 	local mousePos = UserInputService:GetMouseLocation()
 
-	local dx = (screenPos.X - mousePos.X) / Settings.Sensitivity
-	local dy = (screenPos.Y - mousePos.Y) / Settings.Sensitivity
+	local dx = ((screenPos.X - mousePos.X) / Settings.Sensitivity) * Settings.ForceMultiplier
+	local dy = ((screenPos.Y - mousePos.Y) / Settings.Sensitivity) * Settings.ForceMultiplier
+
+	-- Limite por frame (estabilidade)
+	dx = math.clamp(dx, -Settings.MaxStep, Settings.MaxStep)
+	dy = math.clamp(dy, -Settings.MaxStep, Settings.MaxStep)
 
 	mousemoverel(dx, dy)
 end)
@@ -94,14 +101,15 @@ UserInputService.InputBegan:Connect(function(input)
 		return
 	end
 
-	-- Botão direito
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+	-- Segurar G para ativar
+	if input.KeyCode == Settings.ActivationKey then
 		Running = true
 	end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+	-- Soltar G para desativar
+	if input.KeyCode == Settings.ActivationKey then
 		Running = false
 	end
 end)
