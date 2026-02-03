@@ -1,5 +1,3 @@
--- Mouse Aimbot (Head | Hold T)
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -7,8 +5,9 @@ local Camera = workspace.CurrentCamera
 
 local LocalPlayer = Players.LocalPlayer
 local Running = false
-local Sensitivity = 999
+local Strength = 1 -- maior = mais forte
 local LockPart = "Head"
+local LockedPart = nil
 
 local function getClosest()
 	local closest, dist = nil, math.huge
@@ -32,24 +31,29 @@ end
 
 RunService.RenderStepped:Connect(function()
 	if not Running then return end
-	local part = getClosest()
-	if not part then return end
 
-	local pos = Camera:WorldToViewportPoint(part.Position)
+	if not LockedPart then
+		LockedPart = getClosest()
+	end
+	if not LockedPart then return end
+
+	local pos = Camera:WorldToViewportPoint(LockedPart.Position)
 	mousemoverel(
-		(pos.X - UserInputService:GetMouseLocation().X) / Sensitivity,
-		(pos.Y - UserInputService:GetMouseLocation().Y) / Sensitivity
+		(pos.X - UserInputService:GetMouseLocation().X) * Strength,
+		(pos.Y - UserInputService:GetMouseLocation().Y) * Strength
 	)
 end)
 
 UserInputService.InputBegan:Connect(function(i)
 	if i.KeyCode == Enum.KeyCode.T then
 		Running = true
+		LockedPart = nil
 	end
 end)
 
 UserInputService.InputEnded:Connect(function(i)
 	if i.KeyCode == Enum.KeyCode.T then
 		Running = false
+		LockedPart = nil
 	end
 end)
