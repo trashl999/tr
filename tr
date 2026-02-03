@@ -7,7 +7,7 @@ local Camera = workspace.CurrentCamera
 
 local LocalPlayer = Players.LocalPlayer
 local Running = false
-local Sensitivity = 3.5
+local Sensitivity = 10
 local LockPart = "HumanoidRootPart"
 
 local function getClosest()
