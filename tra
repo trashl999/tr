@@ -1,0 +1,109 @@
+--[[
+
+	Aimbot SEM FOV
+	Ativação: SEGURAR G
+	Lock: Head
+	Modo: Mouse (mousemoverel)
+
+]]
+
+--// Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+--// Cache
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local mousemoverel = mousemoverel or (Input and Input.MouseMove)
+
+--// Estado
+local Running = false
+local Typing = false
+
+--// Config
+local Settings = {
+	Enabled = true,
+	LockPart = "Head",
+	Sensitivity = 3.5, -- menor = mais forte
+	TeamCheck = false,
+	ActivationKey = Enum.KeyCode.G
+}
+
+--// Util
+local function GetClosestPlayer()
+	local closest
+	local shortest = math.huge
+	local mousePos = UserInputService:GetMouseLocation()
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			local char = player.Character
+			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+			local part = char and char:FindFirstChild(Settings.LockPart)
+
+			if humanoid and part and humanoid.Health > 0 then
+				if Settings.TeamCheck and player.Team == LocalPlayer.Team then
+					continue
+				end
+
+				local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+				if onScreen then
+					local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+					if dist < shortest then
+						shortest = dist
+						closest = player
+					end
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+--// Loop principal
+RunService.RenderStepped:Connect(function()
+	if not Running or not Settings.Enabled then
+		return
+	end
+
+	local target = GetClosestPlayer()
+	if not target then return end
+
+	local char = target.Character
+	local head = char and char:FindFirstChild(Settings.LockPart)
+	if not head then return end
+
+	local screenPos = Camera:WorldToViewportPoint(head.Position)
+	local mousePos = UserInputService:GetMouseLocation()
+
+	local dx = (screenPos.X - mousePos.X) / Settings.Sensitivity
+	local dy = (screenPos.Y - mousePos.Y) / Settings.Sensitivity
+
+	mousemoverel(dx, dy)
+end)
+
+--// Inputs
+UserInputService.InputBegan:Connect(function(input)
+	if Typing then return end
+
+	if input.KeyCode == Settings.ActivationKey then
+		Running = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.KeyCode == Settings.ActivationKey then
+		Running = false
+	end
+end)
+
+UserInputService.TextBoxFocused:Connect(function()
+	Typing = true
+end)
+
+UserInputService.TextBoxFocusReleased:Connect(function()
+	Typing = false
+end)
