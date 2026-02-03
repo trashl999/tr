@@ -1,0 +1,55 @@
+-- Mouse Aimbot (Hold T)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+
+local LocalPlayer = Players.LocalPlayer
+local Running = false
+local Sensitivity = 3.5
+local LockPart = "HumanoidRootPart"
+
+local function getClosest()
+	local closest, dist = nil, math.huge
+	for _, p in pairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer and p.Character then
+			local part = p.Character:FindFirstChild(LockPart)
+			local hum = p.Character:FindFirstChildOfClass("Humanoid")
+			if part and hum and hum.Health > 0 then
+				local pos, on = Camera:WorldToViewportPoint(part.Position)
+				if on then
+					local d = (UserInputService:GetMouseLocation() - Vector2.new(pos.X, pos.Y)).Magnitude
+					if d < dist then
+						dist, closest = d, part
+					end
+				end
+			end
+		end
+	end
+	return closest
+end
+
+RunService.RenderStepped:Connect(function()
+	if not Running then return end
+	local part = getClosest()
+	if not part then return end
+
+	local pos = Camera:WorldToViewportPoint(part.Position)
+	mousemoverel(
+		(pos.X - UserInputService:GetMouseLocation().X) / Sensitivity,
+		(pos.Y - UserInputService:GetMouseLocation().Y) / Sensitivity
+	)
+end)
+
+UserInputService.InputBegan:Connect(function(i)
+	if i.KeyCode == Enum.KeyCode.T then
+		Running = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(i)
+	if i.KeyCode == Enum.KeyCode.T then
+		Running = false
+	end
+end)
