@@ -1,4 +1,4 @@
--- Mouse Aimbot (Hold T)
+-- Mouse Aimbot (Head | Hold T)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,7 +8,7 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Running = false
 local Sensitivity = 999
-local LockPart = "HumanoidRootPart"
+local LockPart = "Head"
 
 local function getClosest()
 	local closest, dist = nil, math.huge
