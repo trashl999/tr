@@ -1,0 +1,315 @@
+--[[
+
+	Universal Aimbot Module by Exunys
+	MODIFICADO: FOV TOTALMENTE REMOVIDO
+	Aimbot permanece idêntico ao original
+
+]]
+
+--// Cache
+
+local game, workspace = game, workspace
+local getrawmetatable, setmetatable, pcall, getgenv, next, tick =
+	getrawmetatable, setmetatable, pcall, getgenv, next, tick
+
+local Vector2new, Vector3zero, CFramenew =
+	Vector2.new, Vector3.zero, CFrame.new
+
+local Color3fromHSV, TweenInfonew =
+	Color3.fromHSV, TweenInfo.new
+
+local getupvalue, mousemoverel, tablefind, tableremove, stringlower, stringsub, mathclamp =
+	debug.getupvalue, mousemoverel or (Input and Input.MouseMove),
+	table.find, table.remove, string.lower, string.sub, math.clamp
+
+--// Metatable fallback
+
+local GameMetatable = getrawmetatable and getrawmetatable(game) or {
+	__index = function(self, Index)
+		return self[Index]
+	end,
+	__newindex = function(self, Index, Value)
+		self[Index] = Value
+	end
+}
+
+local __index = GameMetatable.__index
+local __newindex = GameMetatable.__newindex
+
+local GetService = __index(game, "GetService")
+
+--// Services
+
+local RunService = GetService(game, "RunService")
+local UserInputService = GetService(game, "UserInputService")
+local TweenService = GetService(game, "TweenService")
+local Players = GetService(game, "Players")
+
+--// Service Methods
+
+local LocalPlayer = __index(Players, "LocalPlayer")
+local Camera = __index(workspace, "CurrentCamera")
+
+local FindFirstChild = __index(game, "FindFirstChild")
+local FindFirstChildOfClass = __index(game, "FindFirstChildOfClass")
+local GetDescendants = __index(game, "GetDescendants")
+local WorldToViewportPoint = __index(Camera, "WorldToViewportPoint")
+local GetPartsObscuringTarget = __index(Camera, "GetPartsObscuringTarget")
+local GetMouseLocation = __index(UserInputService, "GetMouseLocation")
+local GetPlayers = __index(Players, "GetPlayers")
+
+--// Variables
+
+local RequiredDistance = 2000
+local Typing = false
+local Running = false
+local ServiceConnections = {}
+local Animation
+local OriginalSensitivity
+
+local Connect = __index(game, "DescendantAdded").Connect
+local Disconnect
+
+--// Prevent multiple instances
+
+if ExunysDeveloperAimbot and ExunysDeveloperAimbot.Exit then
+	ExunysDeveloperAimbot:Exit()
+end
+
+--// Environment
+
+getgenv().ExunysDeveloperAimbot = {
+
+	DeveloperSettings = {
+		UpdateMode = "RenderStepped",
+		TeamCheckOption = "TeamColor"
+	},
+
+	Settings = {
+		Enabled = true,
+
+		TeamCheck = false,
+		AliveCheck = true,
+		WallCheck = false,
+
+		OffsetToMoveDirection = false,
+		OffsetIncrement = 15,
+
+		Sensitivity = 0,
+		Sensitivity2 = 3.5,
+
+		LockMode = 1, -- 1 = CFrame | 2 = mousemoverel
+		LockPart = "Head",
+
+		TriggerKey = Enum.UserInputType.MouseButton2,
+		Toggle = false
+	},
+
+	Blacklisted = {}
+}
+
+local Environment = getgenv().ExunysDeveloperAimbot
+
+--// Core Functions
+
+local FixUsername = function(String)
+	local Result
+	for _, Value in next, GetPlayers(Players) do
+		local Name = __index(Value, "Name")
+		if stringsub(stringlower(Name), 1, #String) == stringlower(String) then
+			Result = Name
+		end
+	end
+	return Result
+end
+
+local ConvertVector = function(Vector)
+	return Vector2new(Vector.X, Vector.Y)
+end
+
+local CancelLock = function()
+	Environment.Locked = nil
+	__newindex(UserInputService, "MouseDeltaSensitivity", OriginalSensitivity)
+	if Animation then
+		Animation:Cancel()
+	end
+end
+
+local GetClosestPlayer = function()
+	local Settings = Environment.Settings
+	local LockPart = Settings.LockPart
+
+	if not Environment.Locked then
+		RequiredDistance = 2000
+
+		for _, Value in next, GetPlayers(Players) do
+			local Character = __index(Value, "Character")
+			local Humanoid = Character and FindFirstChildOfClass(Character, "Humanoid")
+
+			if Value ~= LocalPlayer
+				and not tablefind(Environment.Blacklisted, __index(Value, "Name"))
+				and Character
+				and FindFirstChild(Character, LockPart)
+				and Humanoid then
+
+				if Settings.TeamCheck and __index(Value, Environment.DeveloperSettings.TeamCheckOption)
+					== __index(LocalPlayer, Environment.DeveloperSettings.TeamCheckOption) then
+					continue
+				end
+
+				if Settings.AliveCheck and __index(Humanoid, "Health") <= 0 then
+					continue
+				end
+
+				if Settings.WallCheck then
+					local BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
+					for _, Part in next, GetDescendants(Character) do
+						BlacklistTable[#BlacklistTable + 1] = Part
+					end
+					if #GetPartsObscuringTarget(Camera,
+						{ __index(Character[LockPart], "Position") },
+						BlacklistTable) > 0 then
+						continue
+					end
+				end
+
+				local Vector, OnScreen =
+					WorldToViewportPoint(Camera, __index(Character[LockPart], "Position"))
+
+				local Distance =
+					(GetMouseLocation(UserInputService) - ConvertVector(Vector)).Magnitude
+
+				if Distance < RequiredDistance and OnScreen then
+					RequiredDistance = Distance
+					Environment.Locked = Value
+				end
+			end
+		end
+	else
+		local LockedPos =
+			WorldToViewportPoint(Camera,
+				__index(__index(Environment.Locked, "Character")[LockPart], "Position"))
+
+		if (GetMouseLocation(UserInputService) - ConvertVector(LockedPos)).Magnitude > RequiredDistance then
+			CancelLock()
+		end
+	end
+end
+
+local Load = function()
+	OriginalSensitivity = __index(UserInputService, "MouseDeltaSensitivity")
+	local Settings = Environment.Settings
+
+	ServiceConnections.RenderSteppedConnection =
+		Connect(__index(RunService, Environment.DeveloperSettings.UpdateMode), function()
+
+			if Running and Settings.Enabled then
+				GetClosestPlayer()
+
+				if Environment.Locked then
+					local Character = __index(Environment.Locked, "Character")
+					local Part = __index(Character, Settings.LockPart)
+
+					local Offset =
+						Settings.OffsetToMoveDirection
+						and __index(FindFirstChildOfClass(Character, "Humanoid"), "MoveDirection")
+						* (mathclamp(Settings.OffsetIncrement, 1, 30) / 10)
+						or Vector3zero
+
+					local TargetPosition = Part.Position + Offset
+					local ScreenPos = WorldToViewportPoint(Camera, TargetPosition)
+
+					if Settings.LockMode == 2 then
+						mousemoverel(
+							(ScreenPos.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2,
+							(ScreenPos.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2
+						)
+					else
+						if Settings.Sensitivity > 0 then
+							Animation = TweenService:Create(
+								Camera,
+								TweenInfonew(Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+								{ CFrame = CFramenew(Camera.CFrame.Position, TargetPosition) }
+							)
+							Animation:Play()
+						else
+							__newindex(Camera, "CFrame",
+								CFramenew(Camera.CFrame.Position, TargetPosition))
+						end
+
+						__newindex(UserInputService, "MouseDeltaSensitivity", 0)
+					end
+				end
+			end
+		end)
+
+	ServiceConnections.InputBeganConnection =
+		Connect(__index(UserInputService, "InputBegan"), function(Input)
+			if Typing then return end
+
+			if Input.UserInputType == Settings.TriggerKey then
+				if Settings.Toggle then
+					Running = not Running
+					if not Running then CancelLock() end
+				else
+					Running = true
+				end
+			end
+		end)
+
+	ServiceConnections.InputEndedConnection =
+		Connect(__index(UserInputService, "InputEnded"), function(Input)
+			if Settings.Toggle or Typing then return end
+
+			if Input.UserInputType == Settings.TriggerKey then
+				Running = false
+				CancelLock()
+			end
+		end)
+end
+
+--// Typing Check
+
+ServiceConnections.TypingStartedConnection =
+	Connect(__index(UserInputService, "TextBoxFocused"), function()
+		Typing = true
+	end)
+
+ServiceConnections.TypingEndedConnection =
+	Connect(__index(UserInputService, "TextBoxFocusReleased"), function()
+		Typing = false
+	end)
+
+--// API
+
+function Environment.Exit(self)
+	for _, Connection in next, ServiceConnections do
+		Disconnect(Connection)
+	end
+	getgenv().ExunysDeveloperAimbot = nil
+end
+
+function Environment.Blacklist(self, Username)
+	Username = FixUsername(Username)
+	self.Blacklisted[#self.Blacklisted + 1] = Username
+end
+
+function Environment.Whitelist(self, Username)
+	Username = FixUsername(Username)
+	local Index = tablefind(self.Blacklisted, Username)
+	if Index then
+		tableremove(self.Blacklisted, Index)
+	end
+end
+
+function Environment.GetClosestPlayer()
+	GetClosestPlayer()
+	local Value = Environment.Locked
+	CancelLock()
+	return Value
+end
+
+Environment.Load = Load
+setmetatable(Environment, { __call = Load })
+
+return Environment
