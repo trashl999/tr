@@ -1,109 +1,226 @@
 --[[
 
-	Aimbot SEM FOV
-	Ativação: SEGURAR G
-	Lock: Head
-	Modo: Mouse (mousemoverel)
+	Exunys Universal Aimbot (MODIFICADO)
+	- SEM FOV
+	- HOLD NA TECLA G
+	- mousemoverel
 
 ]]
 
---// Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-
 --// Cache
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-local mousemoverel = mousemoverel or (Input and Input.MouseMove)
+local game, workspace = game, workspace
+local getrawmetatable, getgenv, pcall, next, tick = getrawmetatable, getgenv, pcall, next, tick
+local Vector2new, Vector3zero = Vector2.new, Vector3.zero
+local mathclamp = math.clamp
+local tablefind = table.find
+local tableremove = table.remove
+local stringlower, stringsub = string.lower, string.sub
 
---// Estado
+local GameMetatable = getrawmetatable and getrawmetatable(game)
+local __index = GameMetatable.__index
+local __newindex = GameMetatable.__newindex
+
+local GetService = __index(game, "GetService")
+
+--// Services
+local RunService = GetService(game, "RunService")
+local UserInputService = GetService(game, "UserInputService")
+local Players = GetService(game, "Players")
+
+--// Objects
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+--// Methods
+local GetPlayers = Players.GetPlayers
+local WorldToViewportPoint = Camera.WorldToViewportPoint
+local GetMouseLocation = UserInputService.GetMouseLocation
+local GetDescendants = game.GetDescendants
+local FindFirstChildOfClass = game.FindFirstChildOfClass
+
+--// Variables
 local Running = false
 local Typing = false
+local RequiredDistance = 2000
+local ServiceConnections = {}
 
---// Config
-local Settings = {
-	Enabled = true,
-	LockPart = "Head",
-	Sensitivity = 3.5, -- menor = mais forte
-	TeamCheck = false,
-	ActivationKey = Enum.KeyCode.G
+--// Environment
+getgenv().ExunysDeveloperAimbot = {
+	Settings = {
+		Enabled = true,
+
+		TeamCheck = false,
+		AliveCheck = true,
+		WallCheck = false,
+
+		OffsetToMoveDirection = false,
+		OffsetIncrement = 15,
+
+		Sensitivity2 = 4,
+
+		LockMode = 2, -- mousemoverel
+		LockPart = "Head",
+
+		TriggerKey = Enum.KeyCode.G,
+		Toggle = false
+	},
+
+	Blacklisted = {},
+	Locked = nil
 }
 
---// Util
-local function GetClosestPlayer()
-	local closest
-	local shortest = math.huge
-	local mousePos = UserInputService:GetMouseLocation()
+local Environment = getgenv().ExunysDeveloperAimbot
 
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer then
-			local char = player.Character
-			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-			local part = char and char:FindFirstChild(Settings.LockPart)
+--// Functions
 
-			if humanoid and part and humanoid.Health > 0 then
-				if Settings.TeamCheck and player.Team == LocalPlayer.Team then
-					continue
-				end
-
-				local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-				if onScreen then
-					local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-					if dist < shortest then
-						shortest = dist
-						closest = player
-					end
-				end
-			end
+local function FixUsername(String)
+	for _, Player in next, GetPlayers(Players) do
+		if stringsub(stringlower(Player.Name), 1, #String) == stringlower(String) then
+			return Player.Name
 		end
 	end
-
-	return closest
 end
 
---// Loop principal
-RunService.RenderStepped:Connect(function()
-	if not Running or not Settings.Enabled then
+local function ConvertVector(Vector)
+	return Vector2new(Vector.X, Vector.Y)
+end
+
+local function CancelLock()
+	Environment.Locked = nil
+end
+
+local function GetClosestPlayer()
+	local Settings = Environment.Settings
+	local LockPart = Settings.LockPart
+
+	RequiredDistance = 2000
+	Environment.Locked = nil
+
+	for _, Player in next, GetPlayers(Players) do
+		if Player == LocalPlayer then
+			continue
+		end
+
+		if tablefind(Environment.Blacklisted, Player.Name) then
+			continue
+		end
+
+		local Character = Player.Character
+		if not Character then
+			continue
+		end
+
+		local Humanoid = FindFirstChildOfClass(Character, "Humanoid")
+		local Part = Character:FindFirstChild(LockPart)
+
+		if not Humanoid or not Part then
+			continue
+		end
+
+		if Settings.AliveCheck and Humanoid.Health <= 0 then
+			continue
+		end
+
+		if Settings.TeamCheck and Player.Team == LocalPlayer.Team then
+			continue
+		end
+
+		local ScreenPos, OnScreen = WorldToViewportPoint(Camera, Part.Position)
+		if not OnScreen then
+			continue
+		end
+
+		local Distance = (GetMouseLocation(UserInputService) - ConvertVector(ScreenPos)).Magnitude
+
+		if Distance < RequiredDistance then
+			RequiredDistance = Distance
+			Environment.Locked = Player
+		end
+	end
+end
+
+--// Main Loop
+ServiceConnections.RenderStepped = RunService.RenderStepped:Connect(function()
+	if not Running or not Environment.Settings.Enabled then
 		return
 	end
 
-	local target = GetClosestPlayer()
-	if not target then return end
+	GetClosestPlayer()
 
-	local char = target.Character
-	local head = char and char:FindFirstChild(Settings.LockPart)
-	if not head then return end
+	local Locked = Environment.Locked
+	if not Locked then
+		return
+	end
 
-	local screenPos = Camera:WorldToViewportPoint(head.Position)
-	local mousePos = UserInputService:GetMouseLocation()
+	local Character = Locked.Character
+	if not Character then
+		CancelLock()
+		return
+	end
 
-	local dx = (screenPos.X - mousePos.X) / Settings.Sensitivity
-	local dy = (screenPos.Y - mousePos.Y) / Settings.Sensitivity
+	local Part = Character:FindFirstChild(Environment.Settings.LockPart)
+	if not Part then
+		CancelLock()
+		return
+	end
 
-	mousemoverel(dx, dy)
+	local ScreenPos = WorldToViewportPoint(Camera, Part.Position)
+	local MousePos = GetMouseLocation(UserInputService)
+
+	mousemoverel(
+		(ScreenPos.X - MousePos.X) / Environment.Settings.Sensitivity2,
+		(ScreenPos.Y - MousePos.Y) / Environment.Settings.Sensitivity2
+	)
 end)
 
---// Inputs
-UserInputService.InputBegan:Connect(function(input)
-	if Typing then return end
+--// Input
+ServiceConnections.InputBegan = UserInputService.InputBegan:Connect(function(Input)
+	if Typing then
+		return
+	end
 
-	if input.KeyCode == Settings.ActivationKey then
+	if Input.KeyCode == Environment.Settings.TriggerKey then
 		Running = true
 	end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
-	if input.KeyCode == Settings.ActivationKey then
+ServiceConnections.InputEnded = UserInputService.InputEnded:Connect(function(Input)
+	if Input.KeyCode == Environment.Settings.TriggerKey then
 		Running = false
+		CancelLock()
 	end
 end)
 
-UserInputService.TextBoxFocused:Connect(function()
+--// Typing Check
+ServiceConnections.TypingStarted = UserInputService.TextBoxFocused:Connect(function()
 	Typing = true
 end)
 
-UserInputService.TextBoxFocusReleased:Connect(function()
+ServiceConnections.TypingEnded = UserInputService.TextBoxFocusReleased:Connect(function()
 	Typing = false
 end)
+
+--// API
+function Environment:Exit()
+	for _, Connection in next, ServiceConnections do
+		Connection:Disconnect()
+	end
+	getgenv().ExunysDeveloperAimbot = nil
+end
+
+function Environment:Blacklist(Username)
+	Username = FixUsername(Username)
+	if Username then
+		self.Blacklisted[#self.Blacklisted + 1] = Username
+	end
+end
+
+function Environment:Whitelist(Username)
+	Username = FixUsername(Username)
+	local Index = tablefind(self.Blacklisted, Username)
+	if Index then
+		tableremove(self.Blacklisted, Index)
+	end
+end
+
+return Environment
