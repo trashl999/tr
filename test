@@ -2,7 +2,7 @@
 
 	Universal Aimbot Module by Exunys
 	FOV REMOVIDO
-	ATIVA AO SEGURAR G
+	ATIVO AO SEGURAR G
 
 ]]
 
@@ -92,11 +92,10 @@ getgenv().ExunysDeveloperAimbot = {
 		Sensitivity = 0,
 		Sensitivity2 = 3.5,
 
-		LockMode = 1,
+		LockMode = 1, -- 1 = CFrame | 2 = mousemoverel
 		LockPart = "Head",
 
-		TriggerKey = Enum.KeyCode.G,
-		Toggle = false
+		TriggerKey = Enum.KeyCode.G
 	},
 
 	Blacklisted = {}
